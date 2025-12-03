@@ -1,0 +1,29 @@
+{
+  "name": "weather-client-function",
+  "version": "1.0.0",
+  "description": "weather client google cloud function",
+  "main": "dist/index.js",
+  "repository": "https://github.com/lsst-epo/weather-client-function.git",
+  "author": "Kevin Wong <kevin.wong@noirlab.edu>",
+  "license": "ISC",
+  "scripts": {
+    "build": "tsc",
+    "start": "functions-framework --target=index",
+    "start-dev": "npx @google-cloud/functions-framework --target=weather-stats --source=dist/index.js --verbose",
+    "prestart": "npm run build",
+    "gcp-build": "npm run build",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^4.0.1",
+    "@google-cloud/logging": "^11.2.1",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
+  }
+}
