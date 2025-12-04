@@ -1,1 +1,7 @@
-gcloud functions deploy weather-client --runtime nodejs20 --trigger-http --allow-unauthenticated --entry-point weather-status --region=us-west1
+gcloud run deploy weather-client \
+    --source . \
+    --function weather-status \
+    --region us-west1 \
+    --base-image nodejs24 \
+    --allow-unauthenticated \
+    --execution-environment gen2

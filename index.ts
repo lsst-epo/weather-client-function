@@ -74,6 +74,9 @@ interface MeteoblueCloudsHourlyResponse extends MeteoblueBaseResponse{
 const BASIC_1H_ENDPOINT = process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h";
 const CLOUD_1H_ENDPOINT = process.env.METOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h";
 
+const BASIC_CACHE_ENDPOINT = process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats";
+const CLOUD_CACHE_ENDPOINT = process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-cloud-stats";
+
 export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     const apiKey = process.env.METEOBLUE_API_KEY;
     const lat = process.env.LAT;
@@ -105,6 +108,16 @@ export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     }
 }
 
+async function cacheResult(endpoint: string, cache_endpoint: string, params: any, data: any) {
+    try {
+        await axios.post(
+            cache_endpoint, { params: params, data: data }
+        )
+    } catch (error: any) {
+        console.warn(`Cache upload error: ${error.message}`)
+    }
+}
+
 async function basicStats(req: ff.Request, res: ff.Response) {
     const mode = req.query.mode || 'current';
     let data = await fetchMeteoblueData<MeteoblueBasicHourlyResponse>(BASIC_1H_ENDPOINT);
@@ -114,6 +127,8 @@ async function basicStats(req: ff.Request, res: ff.Response) {
     if (mode == 'current') {
         result = extractCurrent(result);
     }
+
+    await cacheResult(BASIC_1H_ENDPOINT, BASIC_CACHE_ENDPOINT, mode, result);
     res.json({data: result})
 }
 
@@ -126,6 +141,7 @@ async function cloudStats(req: ff.Request, res: ff.Response) {
     if (mode == 'current') {
         result = extractCurrent(result);
     }
+    await cacheResult(CLOUD_1H_ENDPOINT, CLOUD_CACHE_ENDPOINT, mode, result);
     res.json({data: result})
 }
 
