@@ -1,0 +1,71 @@
+name: Deploy and Test Cloud Function
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    types:
+      - labeled
+      - 'opened'
+      - 'synchronize'
+      - 'reopened'
+    branches:
+      - 'develop'
+      - 'main'
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'preview') || github.event.label.name == 'preview' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: setup node
+        uses: actions/setup-node@v6.1
+        with:
+          node-version: '24'
+      - name: Install Dependencies
+        run: yarn
+      - name: Run tests
+        run: yarn test
+  deploy:
+    name: Deploy Cloud Function
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse deployment info
+        id: deploy-info
+        run: |
+          # Determine environment to deploy to
+          # if ${{ github.ref_type == 'tag'}}; then
+          #   environment_name="prod"
+          #   credentials_json='${{ secrets.PIPELINE_EPO_PROD_PROJECT }}'
+          # elif ${{ contains(github.ref, 'main') || contains(github.base_ref, 'main') }}; then
+          #   environment_name="int"
+          #   credentials_json='${{ secrets.SKYVIEWER_INT_SERVICE_ACCOUNT }}'
+          # else
+          environment_name="dev"
+          credentials_json='${{ secrets.DEV_SA_KEY }}'
+          # fi
+          echo environment_name=$environment_name >> "$GITHUB_OUTPUT"
+          echo credentials_json=$credentials_json >> "$GITHUB_OUTPUT"
+      - name: Login to GCP
+        uses: "google-github-actions/auth@v2.1.11"
+        with:
+          credentials_json: ${{ steps.deploy-info.outputs.credentials_json }}
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2.1.5"
+      - name: Fetch and Set Environment Variables from Secret Manager
+        id: deploy-secrets
+        run: |
+          # Get appropriate secret name
+          SECRET_NAME=$(gcloud secrets list --filter="labels.deployment:${{ steps.deploy-info.outputs.deployment }}" --format="value(name)")
+          # The secret value must be a  YAML string.
+          SECRET_YAML=$(gcloud secrets versions access latest --secret=$SECRET_NAME)
+          # Write YAML file to .env.yaml
+          echo "$SECRET_YAML" > .env.yaml
+      - name: Deploy to Google Cloud functions
+        run: ./deploy.sh
