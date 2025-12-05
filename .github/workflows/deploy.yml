@@ -33,7 +33,7 @@ jobs:
   deploy:
     name: Deploy Cloud Function
     needs: test
-    if: github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main' # TODO: comment this back in once verified that this works
     runs-on: ubuntu-latest
     steps:
       - name: Parse deployment info
