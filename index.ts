@@ -55,7 +55,7 @@ interface MeteoblueBaseResponse {
     units: MeteoblueUnits;
     data_1h: {
         time: string[];
-        [key:string]: any[];
+        [key:string]: any[] | any;
     }
 }
 
