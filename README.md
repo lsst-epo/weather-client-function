@@ -3,9 +3,6 @@ This cloud function does some logic to get the next hour's weather data from met
 
 See [here](https://docs.meteoblue.com/en/weather-apis/forecast-api/overview) for more info on the meteoblue API documentation.
 
-## Notes
-API keys need to be refreshed every year.
-
 ## Architecture
 Planned architecture
 ```mermaid
@@ -49,8 +46,31 @@ yarn build
 
 The above command will create a `/dist` folder with the built Javascript.
 
+Ensure you've populated the `.env.yaml` for Google Cloud Functions v2 deployment.
+
 Then, ensure your `gcloud` CLI is pointed at the correct GCP project and deploy the cloud function:
 
 ```
 sh deploy.sh
 ```
+
+## Development
+### Start Development Server
+Run local development server
+```
+yarn run start-dev
+```
+
+### Testing
+Run tests
+```
+yarn run test
+```
+
+To generate a code coverage report:
+```
+yarn run test -- --coverage
+```
+
+## Notes
+API keys need to be refreshed every year.

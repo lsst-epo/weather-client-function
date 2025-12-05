@@ -55,7 +55,7 @@ interface MeteoblueBaseResponse {
     units: MeteoblueUnits;
     data_1h: {
         time: string[];
-        [key:string]: any[];
+        [key:string]: any[] | any;
     }
 }
 
@@ -71,11 +71,18 @@ interface MeteoblueCloudsHourlyResponse extends MeteoblueBaseResponse{
     data_1h: MeteoblueCloudsHourlyData;
 }
 
-const BASIC_1H_ENDPOINT = process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h";
-const CLOUD_1H_ENDPOINT = process.env.METOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h";
+export const getConfig = () => {
+    return {
+        endpoints: {
+            BASIC_1H_ENDPOINT: process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h",
+            CLOUD_1H_ENDPOINT: process.env.METOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h",
+            BASIC_CACHE_ENDPOINT: process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats",
+            CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats"
+        }
+    };
+};
 
-const BASIC_CACHE_ENDPOINT = process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats";
-const CLOUD_CACHE_ENDPOINT = process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats";
+const { BASIC_1H_ENDPOINT, CLOUD_1H_ENDPOINT, BASIC_CACHE_ENDPOINT, CLOUD_CACHE_ENDPOINT } = getConfig().endpoints;
 
 export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     const apiKey = process.env.METEOBLUE_API_KEY;
@@ -108,7 +115,7 @@ export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     }
 }
 
-async function cacheResult(endpoint: string, cache_endpoint: string, params: any, data: any) {
+export async function cacheResult(endpoint: string, cache_endpoint: string, params: any, data: any) {
     try {
         console.log(`cache_endpoint: ${cache_endpoint},  endpoint: ${endpoint}, params: ${params}, data: ${data},`);
         const payload = { endpoint: endpoint, params: params, data: data }
@@ -120,35 +127,23 @@ async function cacheResult(endpoint: string, cache_endpoint: string, params: any
     }
 }
 
-async function basicStats(req: ff.Request, res: ff.Response) {
-    const mode = req.query.mode || 'current';
-    let data = await fetchMeteoblueData<MeteoblueBasicHourlyResponse>(BASIC_1H_ENDPOINT);
+export async function processStats(req: ff.Request, res: ff.Response, cloudEndpoint: string, cacheEndpoint: string) {
+    const mode = req.query?.mode || 'current';
+    let data = await fetchMeteoblueData<MeteoblueBaseResponse>(cloudEndpoint);
 
     let result = data;
 
     if (mode == 'current') {
         result = extractCurrent(result);
     }
-
-    await cacheResult(BASIC_1H_ENDPOINT, BASIC_CACHE_ENDPOINT, mode, result);
+    await cacheResult(cloudEndpoint, cacheEndpoint, mode, result);
     res.json({data: result})
 }
 
-async function cloudStats(req: ff.Request, res: ff.Response) {
-    const mode = req.query.mode || 'current';
-    let data = await fetchMeteoblueData<MeteoblueCloudsHourlyResponse>(CLOUD_1H_ENDPOINT);
 
-    let result = data;
-
-    if (mode == 'current') {
-        result = extractCurrent(result);
-    }
-    await cacheResult(CLOUD_1H_ENDPOINT, CLOUD_CACHE_ENDPOINT, mode, result);
-    res.json({data: result})
-}
 
 // get nearest hour in the future
-function extractCurrent(data: MeteoblueBaseResponse) {
+export function extractCurrent(data: MeteoblueBaseResponse) {
     const now = new Date();
     const times = data.data_1h.time;
 
@@ -172,13 +167,13 @@ function extractCurrent(data: MeteoblueBaseResponse) {
     return currentStats;
 }
 
-async function weatherStatsHandler (req: ff.Request, res: ff.Response)  {
+export async function weatherStatsHandler (req: ff.Request, res: ff.Response)  {
     if (req.path == "/") {
         return res.status(200).send("🐈‍⬛"); 
     } else if (req.path == "/basic-stats") {
-        return basicStats(req, res);
+        return processStats(req, res, BASIC_1H_ENDPOINT, BASIC_CACHE_ENDPOINT);
     } else if (req.path == "/cloud-stats") {
-        return cloudStats(req, res);
+        return processStats(req, res, CLOUD_1H_ENDPOINT, CLOUD_CACHE_ENDPOINT);
     } else {
         return res.status(400).send("Oopsies.");
     }
