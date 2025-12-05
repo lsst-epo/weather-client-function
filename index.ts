@@ -121,7 +121,7 @@ export async function cacheResult(endpoint: string, cache_endpoint: string, para
 }
 
 export async function processStats(req: ff.Request, res: ff.Response, cloudEndpoint: string, cacheEndpoint: string) {
-    const mode = req.query.mode || 'current';
+    const mode = req.query?.mode || 'current';
     let data = await fetchMeteoblueData<MeteoblueBaseResponse>(cloudEndpoint);
 
     let result = data;
