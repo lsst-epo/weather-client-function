@@ -71,11 +71,18 @@ interface MeteoblueCloudsHourlyResponse extends MeteoblueBaseResponse{
     data_1h: MeteoblueCloudsHourlyData;
 }
 
-const BASIC_1H_ENDPOINT = process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h";
-const CLOUD_1H_ENDPOINT = process.env.METOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h";
+export const getConfig = () => {
+    return {
+        endpoints: {
+            BASIC_1H_ENDPOINT: process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h",
+            CLOUD_1H_ENDPOINT: process.env.METOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h",
+            BASIC_CACHE_ENDPOINT: process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats",
+            CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats"
+        }
+    };
+};
 
-const BASIC_CACHE_ENDPOINT = process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats";
-const CLOUD_CACHE_ENDPOINT = process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats";
+const { BASIC_1H_ENDPOINT, CLOUD_1H_ENDPOINT, BASIC_CACHE_ENDPOINT, CLOUD_CACHE_ENDPOINT } = getConfig().endpoints;
 
 export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     const apiKey = process.env.METEOBLUE_API_KEY;

@@ -3,7 +3,8 @@ import {
     processStats, 
     extractCurrent, 
     cacheResult,
-    fetchMeteoblueData
+    fetchMeteoblueData,
+    getConfig
 } from './index';
 import {jest, test} from '@jest/globals';
 import * as ff from '@google-cloud/functions-framework';
@@ -82,6 +83,16 @@ describe('Weather stats', () => {
             expect(basic_env).toBe('blah');
             expect(cloud_env).toBe('blah');
         });
+
+        it('should ues correct defaults', () => {
+            delete process.env.METEOBLUE_BASIC_API;
+
+            const config = getConfig();
+
+            expect(config.endpoints.BASIC_1H_ENDPOINT).toBe(
+                "https://my.meteoblue.com/packages/basic-1h"
+            );
+        })
 
     })
     describe('fetchMeteoblueData()', () => {
