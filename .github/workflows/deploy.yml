@@ -15,8 +15,8 @@ on:
       - 'main'
 
 jobs:
-  test:
-    name: Run Unit Tests
+  test-and-deploy:
+    name: Run Unit Tests and Deploy if needed
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'preview') || github.event.label.name == 'preview' }}
     steps:
@@ -30,13 +30,8 @@ jobs:
         run: yarn
       - name: Run tests
         run: yarn test
-  deploy:
-    name: Deploy Cloud Function
-    needs: test
-    # if: github.ref == 'refs/heads/main' # TODO: comment this back in once verified that this works
-    runs-on: ubuntu-latest
-    steps:
       - name: Parse deployment info
+        # if: github.ref == 'refs/heads/main' # TODO: comment this back in once verified that this works
         id: deploy-info
         run: |
           # Determine environment to deploy to
@@ -56,12 +51,15 @@ jobs:
           echo secret_key_name=$secret_key_name >> "$GITHUB_OUTPUT"
 
       - name: Login to GCP
+        # if: github.ref == 'refs/heads/main' # TODO: comment this back in once verified that this works
         uses: "google-github-actions/auth@v2.1.11"
         with:
           credentials_json: ${{ steps.deploy-info.outputs.credentials_json }}
       - name: "Set up Cloud SDK"
+        # if: github.ref == 'refs/heads/main' # TODO: comment this back in once verified that this works
         uses: "google-github-actions/setup-gcloud@v2.1.5"
       - name: Fetch and Set Environment Variables from Secret Manager
+        # if: github.ref == 'refs/heads/main' # TODO: comment this back in once verified that this works
         id: deploy-secrets
         run: |
           # The secret value must be a  YAML string.
