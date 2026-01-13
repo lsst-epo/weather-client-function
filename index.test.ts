@@ -77,20 +77,32 @@ describe('Weather stats', () => {
     describe('env variables', () => {
         it('should use env vars if defined', () => {
             process.env.METEOBLUE_BASIC_API = 'blah';
-            process.env.METOBLUE_CLOUD_API = 'blah';
+            process.env.METEOBLUE_CLOUD_API = 'blah';
+            process.env.METEOBLUE_CURRENT_API = 'blah';
             const basic_env = process.env.METEOBLUE_BASIC_API || 'https://my.meteoblue.com/packages/basic-1h';
-            const cloud_env = process.env.METOBLUE_CLOUD_API || '"https://my.meteoblue.com/packages/clouds-1h';
+            const cloud_env = process.env.METEOBLUE_CLOUD_API || 'https://my.meteoblue.com/packages/clouds-1h';
+            const current_env = process.env.METEOBLUE_CURRENT_API || 'https://my.meteoblue.com/packages/current';
             expect(basic_env).toBe('blah');
             expect(cloud_env).toBe('blah');
+            expect(current_env).toBe('blah');
         });
 
-        it('should ues correct defaults', () => {
+        it('should use correct defaults', () => {
             delete process.env.METEOBLUE_BASIC_API;
-
+            delete process.env.METEOBLUE_CLOUD_API;
+            delete process.env.METEOBLUE_CURRENT_API;
             const config = getConfig();
 
             expect(config.endpoints.BASIC_1H_ENDPOINT).toBe(
                 "https://my.meteoblue.com/packages/basic-1h"
+            );
+
+            expect(config.endpoints.CLOUD_1H_ENDPOINT).toBe(
+                "https://my.meteoblue.com/packages/clouds-1h"
+            );
+
+            expect(config.endpoints.CURRENT_ENDPOINT).toBe(
+                "https://my.meteoblue.com/packages/current"
             );
         })
 
@@ -243,10 +255,27 @@ describe('Weather stats', () => {
             )
         });
 
-        it('routes /cloud-stats to processStats', async () => {
+        it('routes /forecasted-basic-stats to processStats without explicit mode', async () => {
+            mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess});
+
+            const req = { path: "/forecasted-basic-stats"} as any;
+            const res = mockRes();
+
+            await weatherStatsHandler(req, res);
+
+            expect(res.json).toHaveBeenCalled();
+
+            // check if correct endpoint
+            expect(mockedAxios.get).toHaveBeenCalledWith(
+                expect.stringContaining('basic'),
+                expect.any(Object)
+            )
+        });
+
+        it('routes /forecasted-cloud-stats to processStats', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess});
 
-            const req = { path: "/cloud-stats", query: {mode: "current"}} as any;
+            const req = { path: "/forecasted-cloud-stats", query: {mode: "current"}} as any;
             const res = mockRes();
 
             await weatherStatsHandler(req, res);
@@ -260,10 +289,10 @@ describe('Weather stats', () => {
             )
         })
 
-        it('routes /cloud-stats to processStats without explicit mode', async () => {
+        it('routes /forecasted-cloud-stats to processStats without explicit mode', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess});
 
-            const req = { path: "/cloud-stats"} as any;
+            const req = { path: "/forecasted-cloud-stats"} as any;
             const res = mockRes();
 
             await weatherStatsHandler(req, res);

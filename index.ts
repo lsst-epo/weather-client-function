@@ -75,14 +75,23 @@ export const getConfig = () => {
     return {
         endpoints: {
             BASIC_1H_ENDPOINT: process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h",
-            CLOUD_1H_ENDPOINT: process.env.METOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h",
+            CLOUD_1H_ENDPOINT: process.env.METEOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h",
+            CURRENT_ENDPOINT: process.env.METEOBLUE_CURRENT_API || "https://my.meteoblue.com/packages/current",
             BASIC_CACHE_ENDPOINT: process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats",
-            CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats"
+            CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats",
+            CURRENT_CACHE_ENDPOINT: process.env.CURRENT_CACHE_ENDPOINT ||  "https://us-west1-skyviewer.cloudfunctions.net/redis-client/raw-current-weather-stats"
         }
     };
 };
 
-const { BASIC_1H_ENDPOINT, CLOUD_1H_ENDPOINT, BASIC_CACHE_ENDPOINT, CLOUD_CACHE_ENDPOINT } = getConfig().endpoints;
+const { 
+    BASIC_1H_ENDPOINT, 
+    CLOUD_1H_ENDPOINT, 
+    BASIC_CACHE_ENDPOINT, 
+    CLOUD_CACHE_ENDPOINT, 
+    CURRENT_ENDPOINT, 
+    CURRENT_CACHE_ENDPOINT
+} = getConfig().endpoints;
 
 export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     const apiKey = process.env.METEOBLUE_API_KEY;
@@ -133,7 +142,7 @@ export async function processStats(req: ff.Request, res: ff.Response, cloudEndpo
 
     let result = data;
 
-    if (mode == 'current') {
+    if (mode == 'current' && cloudEndpoint !== CURRENT_ENDPOINT) {
         result = extractCurrent(result);
     }
     await cacheResult(cloudEndpoint, cacheEndpoint, mode, result);
@@ -171,8 +180,10 @@ export async function weatherStatsHandler (req: ff.Request, res: ff.Response)  {
     if (req.path == "/") {
         return res.status(200).send("🐈‍⬛"); 
     } else if (req.path == "/basic-stats") {
+        return processStats(req, res, CURRENT_ENDPOINT, CURRENT_CACHE_ENDPOINT);
+    } else if (req.path == "/forecasted-basic-stats") {
         return processStats(req, res, BASIC_1H_ENDPOINT, BASIC_CACHE_ENDPOINT);
-    } else if (req.path == "/cloud-stats") {
+    } else if (req.path == "/forecasted-cloud-stats") {
         return processStats(req, res, CLOUD_1H_ENDPOINT, CLOUD_CACHE_ENDPOINT);
     } else {
         return res.status(400).send("Oopsies.");
