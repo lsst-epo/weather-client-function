@@ -69,6 +69,7 @@ describe('Weather stats', () => {
     const ENV = process.env;
     beforeEach(() => {
         jest.useFakeTimers().setSystemTime(new Date("2025-12-01 01:30"));
+        jest.clearAllMocks();
         process.env = ENV;
     })
     afterEach(() => {
@@ -278,10 +279,8 @@ describe('Weather stats', () => {
             await weatherStatsHandler(req, res);
             
             // check if correct endpoint
-            expect(mockedAxios.get).toHaveBeenCalledWith(
-                expect.stringContaining(''),
-                expect.any(Object)
-            )
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.send).toHaveBeenCalledWith("🐈‍⬛");
         })
 
         it('returns 400 for unknown paths', async () => {
