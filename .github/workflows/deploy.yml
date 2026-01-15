@@ -28,6 +28,8 @@ jobs:
           node-version: '24'
       - name: Install Dependencies
         run: yarn
+      - name: Load sample .env
+        run: cp .env.sample .env
       - name: Run tests
         run: yarn test
       - name: Parse deployment info
