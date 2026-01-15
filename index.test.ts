@@ -74,45 +74,13 @@ describe('Weather stats', () => {
     afterEach(() => {
         jest.useRealTimers();
     })
-    describe('env variables', () => {
-        it('should use env vars if defined', () => {
-            process.env.METEOBLUE_BASIC_API = 'blah';
-            process.env.METEOBLUE_CLOUD_API = 'blah';
-            process.env.METEOBLUE_CURRENT_API = 'blah';
-            const basic_env = process.env.METEOBLUE_BASIC_API || 'https://my.meteoblue.com/packages/basic-1h';
-            const cloud_env = process.env.METEOBLUE_CLOUD_API || 'https://my.meteoblue.com/packages/clouds-1h';
-            const current_env = process.env.METEOBLUE_CURRENT_API || 'https://my.meteoblue.com/packages/current';
-            expect(basic_env).toBe('blah');
-            expect(cloud_env).toBe('blah');
-            expect(current_env).toBe('blah');
-        });
 
-        it('should use correct defaults', () => {
-            delete process.env.METEOBLUE_BASIC_API;
-            delete process.env.METEOBLUE_CLOUD_API;
-            delete process.env.METEOBLUE_CURRENT_API;
-            const config = getConfig();
-
-            expect(config.endpoints.BASIC_1H_ENDPOINT).toBe(
-                "https://my.meteoblue.com/packages/basic-1h"
-            );
-
-            expect(config.endpoints.CLOUD_1H_ENDPOINT).toBe(
-                "https://my.meteoblue.com/packages/clouds-1h"
-            );
-
-            expect(config.endpoints.CURRENT_ENDPOINT).toBe(
-                "https://my.meteoblue.com/packages/current"
-            );
-        })
-
-    })
     describe('fetchMeteoblueData()', () => {
         it('propagates errors on API error', async () => {
             const mockError = new Error('Error');
             mockedAxios.get.mockRejectedValueOnce(mockError);
 
-            await expect(fetchMeteoblueData('https://my.meteoblue.com/packages/basic-1h')).rejects.toThrow('Error');
+            await expect(fetchMeteoblueData(ENV.METEOBLUE_BASIC_API as string)).rejects.toThrow('Error');
         });
 
         it('should use default value for history and forecast days', async () => {
@@ -123,7 +91,7 @@ describe('Weather stats', () => {
                 data: {"success": true}
             })
 
-            await fetchMeteoblueData('https://my.meteoblue.com/packages/basic-1h');
+            await fetchMeteoblueData(ENV.METEOBLUE_BASIC_API as string);
             expect(mockedAxios.get).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({
@@ -137,7 +105,6 @@ describe('Weather stats', () => {
     })
     describe('extractCurrent()', () => {
         it('finds correct time slot if current time is within range', () => {
-            // jest.useFakeTimers().setSystemTime(new Date("2025-12-01 01:30"));
             const result = extractCurrent(mockedMeteoblueBasicResponseSuccess as any);
 
             expect(result.time).toBe("2025-12-01 02:00");
@@ -161,8 +128,6 @@ describe('Weather stats', () => {
         })
 
         it('extract current returns correct result even if undefined', () => {
-            // let malformedMockData = mockedMeteoblueBasicResponseSuccess;
-
             const mockedMeteoblueCloudResponseSuccessFake = {
                 metadata: {
                     "modelrun_updatetime_utc": "2025-12-03 17:09",
@@ -185,17 +150,15 @@ describe('Weather stats', () => {
 
             const result = extractCurrent(mockedMeteoblueCloudResponseSuccessFake);
 
-            // expect(result.time).toBe("2025-12-01 02:00");
             expect(result.temperature).toBe(undefined);
         })
     })
-    // TODO: fill this out more
     describe('processStats()', () => {
         it('fetches data, extracts mode, caches result', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess });
             mockedAxios.post.mockResolvedValueOnce({ status: 200 }) // for redis cache
 
-            const result = await processStats(req, res, ENV.METEOBLUE_BASIC_API || 'https://my.meteoblue.com/packages/basic-1h', 'http://basic_cache_api');
+            const result = await processStats(req, res, ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string);
 
             expect(res.json).toHaveBeenCalled();
         })
@@ -207,7 +170,7 @@ describe('Weather stats', () => {
                 query: {mode: "full_history"}
             } as unknown as ff.Request;
 
-            const result = await processStats(req, res, ENV.METEOBLUE_BASIC_API || 'https://my.meteoblue.com/packages/basic-1h', 'http://basic_cache_api');
+            const result = await processStats(req, res, ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string);
 
             expect(res.json).toHaveBeenCalled();
         })
@@ -336,7 +299,7 @@ describe('Weather stats', () => {
             
             // suppress output during test and verify it was called
             const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(()=>{});
-            await expect(processStats(req, res, 'https://my.meteoblue.com/packages/basic-1h', 'http://basic_cache_api'))
+            await expect(processStats(req, res, ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string))
                 .resolves.not.toThrow();
 
             expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Cache upload error: Cache Down"));

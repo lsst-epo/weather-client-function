@@ -74,12 +74,12 @@ interface MeteoblueCloudsHourlyResponse extends MeteoblueBaseResponse{
 export const getConfig = () => {
     return {
         endpoints: {
-            BASIC_1H_ENDPOINT: process.env.METEOBLUE_BASIC_API || "https://my.meteoblue.com/packages/basic-1h",
-            CLOUD_1H_ENDPOINT: process.env.METEOBLUE_CLOUD_API || "https://my.meteoblue.com/packages/clouds-1h",
-            CURRENT_ENDPOINT: process.env.METEOBLUE_CURRENT_API || "https://my.meteoblue.com/packages/current",
-            BASIC_CACHE_ENDPOINT: process.env.BASIC_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/basic-weather-stats",
-            CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT || "https://us-west1-skyviewer.cloudfunctions.net/redis-client/cloud-weather-stats",
-            CURRENT_CACHE_ENDPOINT: process.env.CURRENT_CACHE_ENDPOINT ||  "https://us-west1-skyviewer.cloudfunctions.net/redis-client/raw-current-weather-stats"
+            BASIC_1H_ENDPOINT: process.env.METEOBLUE_BASIC_API as string,
+            CLOUD_1H_ENDPOINT: process.env.METEOBLUE_CLOUD_API as string,
+            CURRENT_ENDPOINT: process.env.METEOBLUE_CURRENT_API as string,
+            BASIC_CACHE_ENDPOINT: process.env.BASIC_CACHE_ENDPOINT as string,
+            CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT as string,
+            CURRENT_CACHE_ENDPOINT: process.env.CURRENT_CACHE_ENDPOINT as string
         }
     };
 };
