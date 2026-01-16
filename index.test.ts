@@ -197,7 +197,7 @@ describe('Weather stats', () => {
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
-                expect.stringContaining('basic'),
+                expect.stringContaining('current'),
                 expect.any(Object)
             )
         });
@@ -214,7 +214,7 @@ describe('Weather stats', () => {
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
-                expect.stringContaining('basic'),
+                expect.stringContaining('current'),
                 expect.any(Object)
             )
         });
