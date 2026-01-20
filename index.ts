@@ -1,75 +1,7 @@
 import 'dotenv/config'
 import * as ff from '@google-cloud/functions-framework';
 import axios from "axios";
-
-interface MeteoblueMetadata {
-    modelrun_updatetime_utc: string;
-    name: string;
-    height: number;
-    timezone_abbrevation: string;
-    latitude: number;
-    modelrun_utc: string;
-    longitude: number;
-    utc_timeoffset: number;
-    generation_time_ms: number;
-    [key: string]: any;
-}
-
-interface MeteoblueUnits {
-    [key: string]: string;
-}
-
-interface MeteoblueBasicHourlyData {
-    time: string[];
-    snowfraction: number[];
-    windspeed: number[];
-    temperature: number[];
-    precipitation_probability: number[];
-    convective_precipitation: number[];
-    rainspot: string[];
-    pictocode: number[];
-    felttemperature: number[];
-    precipitation: number[];
-    isdaylight: number[];
-    uvindex: number[];
-    relativehumidity: number[];
-    sealevelpressure: number[];
-    winddirection: number[];
-    [key: string]: any[];
-}
-
-interface MeteoblueCloudsHourlyData {
-    time: string[];
-    totalcloudcover: number[];
-    fog_probability: number[];
-    highclouds: number[];
-    lowclouds: number[];
-    visibility: number[];
-    midclouds: number[];
-    sunshinetime: number[];
-    [key: string]: any[];
-}
-
-interface MeteoblueBaseResponse {
-    metadata: MeteoblueMetadata;
-    units: MeteoblueUnits;
-    data_1h: {
-        time: string[];
-        [key:string]: any[] | any;
-    }
-}
-
-interface MeteoblueBasicHourlyResponse extends MeteoblueBaseResponse{
-    metadata: MeteoblueMetadata;
-    units: MeteoblueUnits;
-    data_1h: MeteoblueBasicHourlyData;
-}
-
-interface MeteoblueCloudsHourlyResponse extends MeteoblueBaseResponse{
-    metadata: MeteoblueMetadata;
-    units: MeteoblueUnits;
-    data_1h: MeteoblueCloudsHourlyData;
-}
+import { MeteoblueMetadata, MeteoblueUnits, MeteoblueBasicHourlyData, MeteoblueCloudsHourlyData, MeteoblueBaseResponse, MeteoblueBasicHourlyResponse, MeteoblueCloudsHourlyResponse } from './types';
 
 export const getConfig = () => {
     return {
@@ -80,6 +12,10 @@ export const getConfig = () => {
             BASIC_CACHE_ENDPOINT: process.env.BASIC_CACHE_ENDPOINT as string,
             CLOUD_CACHE_ENDPOINT: process.env.CLOUD_CACHE_ENDPOINT as string,
             CURRENT_CACHE_ENDPOINT: process.env.CURRENT_CACHE_ENDPOINT as string
+        },
+        tokens: {
+            AUTH_TOKEN: process.env.AUTH_TOKEN as string,
+            REDIS_CACHE_TOKEN: process.env.REDIS_CACHE_TOKEN as string
         }
     };
 };
@@ -92,6 +28,8 @@ const {
     CURRENT_ENDPOINT, 
     CURRENT_CACHE_ENDPOINT
 } = getConfig().endpoints;
+
+const { AUTH_TOKEN, REDIS_CACHE_TOKEN } = getConfig().tokens;
 
 export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     const apiKey = process.env.METEOBLUE_API_KEY;
@@ -129,14 +67,34 @@ export async function cacheResult(endpoint: string, cache_endpoint: string, para
         console.log(`cache_endpoint: ${cache_endpoint},  endpoint: ${endpoint}, params: ${params}, data: ${data},`);
         const payload = { endpoint: endpoint, params: params, data: data }
         await axios.post(
-            cache_endpoint, payload
+            cache_endpoint, 
+            payload,
+            {
+                headers: {
+                    'Authorization': `Bearer ${REDIS_CACHE_TOKEN}`
+                }
+            }
         )
-    } catch (error: any) {
-        console.warn(`Cache upload error: ${error.message}`)
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Cache upload error: ${message}`)
     }
 }
 
+
 export async function processStats(req: ff.Request, res: ff.Response, cloudEndpoint: string, cacheEndpoint: string) {
+    // require auth headers
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({error: "Unauthorized: Missing Bearer Token"});
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    if (token !== AUTH_TOKEN as string) {
+        return res.status(401).json({error: "Unauthorized: Invalid Token"});
+    }
+
     const mode = req.query?.mode || 'current';
     let data = await fetchMeteoblueData<MeteoblueBaseResponse>(cloudEndpoint);
 
