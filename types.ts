@@ -66,3 +66,9 @@ export interface MeteoblueCloudsHourlyResponse extends MeteoblueBaseResponse{
     units: MeteoblueUnits;
     data_1h: MeteoblueCloudsHourlyData;
 }
+
+export interface MeteoblueCurrentSlice {
+    time: string;
+    units: MeteoblueUnits;
+    [key: string]: string | number | MeteoblueUnits; 
+}

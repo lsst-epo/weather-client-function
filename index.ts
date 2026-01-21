@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import * as ff from '@google-cloud/functions-framework';
 import axios from "axios";
-import { MeteoblueMetadata, MeteoblueUnits, MeteoblueBasicHourlyData, MeteoblueCloudsHourlyData, MeteoblueBaseResponse, MeteoblueBasicHourlyResponse, MeteoblueCloudsHourlyResponse } from './types';
+import { MeteoblueBaseResponse, MeteoblueCurrentSlice } from './types';
 
 export const getConfig = () => {
     return {
@@ -62,17 +62,15 @@ export async function fetchMeteoblueData<T>(endpoint: string): Promise<T> {
     }
 }
 
-export async function cacheResult(endpoint: string, cache_endpoint: string, params: any, data: any) {
+export async function cacheResult(endpoint: string, cache_endpoint: string, params: string, data: MeteoblueBaseResponse | MeteoblueCurrentSlice) {
     try {
-        console.log(`cache_endpoint: ${cache_endpoint},  endpoint: ${endpoint}, params: ${params}, data: ${data},`);
         const payload = { endpoint: endpoint, params: params, data: data }
         await axios.post(
             cache_endpoint, 
             payload,
             {
                 headers: {
-                    'Authorization': `Bearer ${REDIS_CACHE_TOKEN}`
-                }
+                    'Authorization': `Bearer ${REDIS_CACHE_TOKEN}`                }
             }
         )
     } catch (error) {
@@ -95,10 +93,10 @@ export async function processStats(req: ff.Request, res: ff.Response, cloudEndpo
         return res.status(401).json({error: "Unauthorized: Invalid Token"});
     }
 
-    const mode = req.query?.mode || 'current';
+    const mode = (req.query?.mode || 'current') as string;
     let data = await fetchMeteoblueData<MeteoblueBaseResponse>(cloudEndpoint);
 
-    let result = data;
+    let result: MeteoblueBaseResponse | MeteoblueCurrentSlice = data;
 
     if (mode == 'current' && cloudEndpoint !== CURRENT_ENDPOINT) {
         result = extractCurrent(result);
@@ -110,7 +108,7 @@ export async function processStats(req: ff.Request, res: ff.Response, cloudEndpo
 
 
 // get nearest hour in the future
-export function extractCurrent(data: MeteoblueBaseResponse) {
+export function extractCurrent(data: MeteoblueBaseResponse): MeteoblueCurrentSlice {
     const now = new Date();
     const times = data.data_1h.time;
 
@@ -120,7 +118,7 @@ export function extractCurrent(data: MeteoblueBaseResponse) {
         targetIndex = times.length - 1; 
     }
 
-    const currentStats: any = {
+    const currentStats: MeteoblueCurrentSlice = {
         time: times[targetIndex],
         units: data.units
     };
