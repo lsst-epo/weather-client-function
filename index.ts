@@ -70,7 +70,8 @@ export async function cacheResult(endpoint: string, cache_endpoint: string, para
             payload,
             {
                 headers: {
-                    'Authorization': `Bearer ${REDIS_CACHE_TOKEN}`                }
+                    'Authorization': `Bearer ${REDIS_CACHE_TOKEN}`
+                }
             }
         )
     } catch (error) {
@@ -80,20 +81,7 @@ export async function cacheResult(endpoint: string, cache_endpoint: string, para
 }
 
 
-export async function processStats(req: ff.Request, res: ff.Response, cloudEndpoint: string, cacheEndpoint: string) {
-    // require auth headers
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-        return res.status(401).json({error: "Unauthorized: Missing Bearer Token"});
-    }
-
-    const token = authHeader.split(' ')[1];
-
-    if (token !== AUTH_TOKEN as string) {
-        return res.status(401).json({error: "Unauthorized: Invalid Token"});
-    }
-
-    const mode = (req.query?.mode || 'current') as string;
+export async function processStats(cloudEndpoint: string, cacheEndpoint: string, mode: string = "current") {
     let data = await fetchMeteoblueData<MeteoblueBaseResponse>(cloudEndpoint);
 
     let result: MeteoblueBaseResponse | MeteoblueCurrentSlice = data;
@@ -102,7 +90,7 @@ export async function processStats(req: ff.Request, res: ff.Response, cloudEndpo
         result = extractCurrent(result);
     }
     await cacheResult(cloudEndpoint, cacheEndpoint, mode, result);
-    res.json({data: result})
+    return result;
 }
 
 
@@ -133,14 +121,33 @@ export function extractCurrent(data: MeteoblueBaseResponse): MeteoblueCurrentSli
 }
 
 export async function weatherStatsHandler (req: ff.Request, res: ff.Response)  {
-    if (req.path == "/") {
+    // require auth headers
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({error: "Unauthorized: Missing Bearer Token"});
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    if (token !== AUTH_TOKEN as string) {
+        return res.status(401).json({error: "Unauthorized: Invalid Token"});
+    }
+
+    const mode = (req.query?.mode || 'current') as string;
+    const path = req.path;
+
+    
+    if (path == "/") {
         return res.status(200).send("🐈‍⬛"); 
-    } else if (req.path == "/basic-stats") {
-        return processStats(req, res, CURRENT_ENDPOINT, CURRENT_CACHE_ENDPOINT);
-    } else if (req.path == "/forecasted-basic-stats") {
-        return processStats(req, res, BASIC_1H_ENDPOINT, BASIC_CACHE_ENDPOINT);
-    } else if (req.path == "/forecasted-cloud-stats") {
-        return processStats(req, res, CLOUD_1H_ENDPOINT, CLOUD_CACHE_ENDPOINT);
+    } else if (path == "/basic-stats") {
+        const data = await processStats(CURRENT_ENDPOINT, CURRENT_CACHE_ENDPOINT, mode);
+        return res.json({data});
+    } else if (path == "/forecasted-basic-stats") {
+        const data = await processStats(BASIC_1H_ENDPOINT, BASIC_CACHE_ENDPOINT, mode);
+        return res.json({data});
+    } else if (path == "/forecasted-cloud-stats") {
+        const data = await processStats(CLOUD_1H_ENDPOINT, CLOUD_CACHE_ENDPOINT, mode);
+        return res.json({data});
     } else {
         return res.status(400).send("Oopsies.");
     }

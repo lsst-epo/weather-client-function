@@ -2,14 +2,15 @@ import {
     weatherStatsHandler, 
     processStats, 
     extractCurrent, 
-    cacheResult,
     fetchMeteoblueData,
+    cacheResult,
     getConfig
 } from './index';
-import {jest, test} from '@jest/globals';
+import {jest} from '@jest/globals';
 import * as ff from '@google-cloud/functions-framework';
 import axios from 'axios';
-import 'dotenv/config'
+import 'dotenv/config';
+import { createRequest, createResponse, MockRequest, MockResponse } from 'node-mocks-http';
 
 
 jest.mock('axios'); // mock axios globally at top level to prevent accidental network calls
@@ -55,24 +56,15 @@ const mockedMeteoblueCloudResponseSuccess = {
     }
 };
 
-const req = {
-    query: {
-        mode: "current"
-    }
-} as unknown as ff.Request; // "as unknown as" is a double-cast trick to force partial object into strict type
-
-
-
-const res = {
-    status: jest.fn().mockReturnThis(),
-    json: jest.fn().mockReturnThis(),
-    send: jest.fn().mockReturnThis(),
-} as unknown as ff.Response;
 
 describe('Weather stats', () => {
     const ENV = process.env;
     let REDIS_CACHE_TOKEN: string;
     let AUTH_TOKEN: string;
+
+    let req: MockRequest<ff.Request>;
+    let res: MockResponse<ff.Response>;
+
     beforeEach(() => {
         jest.useFakeTimers().setSystemTime(new Date("2025-12-01 01:30"));
 
@@ -81,6 +73,14 @@ describe('Weather stats', () => {
         AUTH_TOKEN = config.tokens.AUTH_TOKEN as string;
         jest.clearAllMocks();
         process.env = ENV;
+
+        req = createRequest({
+            method: 'GET',
+            query: {
+                mode: "current"
+            }
+        }) as MockRequest<ff.Request>;
+        res = createResponse() as MockResponse<ff.Response>;
     })
     afterEach(() => {
         jest.useRealTimers();
@@ -98,7 +98,7 @@ describe('Weather stats', () => {
             delete process.env.HISTORY_DAYS;
             delete process.env.FORECAST_DAYS;
 
-            mockedAxios.get.mockResolvedValue({
+            mockedAxios.get.mockResolvedValueOnce({
                 data: {"success": true}
             })
 
@@ -116,14 +116,14 @@ describe('Weather stats', () => {
     })
     describe('extractCurrent()', () => {
         it('finds correct time slot if current time is within range', () => {
-            const result = extractCurrent(mockedMeteoblueBasicResponseSuccess as any);
+            const result = extractCurrent(mockedMeteoblueBasicResponseSuccess);
 
             expect(result.time).toBe("2025-12-01 02:00");
         })
 
         it('defaults to last index if current time is out of  range', () => {
             jest.useFakeTimers().setSystemTime(new Date("2026-01-01 00:00"));
-            const result = extractCurrent(mockedMeteoblueBasicResponseSuccess as any);
+            const result = extractCurrent(mockedMeteoblueBasicResponseSuccess);
 
             expect(result.time).toBe("2025-12-01 03:00");
         })
@@ -165,60 +165,35 @@ describe('Weather stats', () => {
         })
     })
     describe('processStats()', () => {
-        it('fetches data, extracts mode, caches result', async () => {
-            mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess });
-            const authReq = {
-                ...req,
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
-            mockedAxios.post.mockResolvedValueOnce({ status: 200 }) // for redis cache
-
-            const result = await processStats(authReq, res, ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string);
-
-            expect(res.json).toHaveBeenCalled();
-        })
-
-        it('fetches data, extracts mode, caches result', async () => {
+        it('fetches data, caches result', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess });
             mockedAxios.post.mockResolvedValueOnce({ status: 200 }) // for redis cache
-            const req = {
-                query: {mode: "full_history"},
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
 
-            const result = await processStats(req, res, ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string);
+            const data = await processStats(ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string);
+            expect(data).toBeDefined();
+            expect(data).toHaveProperty('units');
 
-            expect(res.json).toHaveBeenCalled();
+            expect(mockedAxios.post).toHaveBeenCalled();
         })
     })
 
     describe('weatherStatsHandler', () => {
-        const mockRes = () => {
-            const res: any = {};
-            res.status = jest.fn().mockReturnValue(res);
-            res.send = jest.fn().mockReturnValue(res);
-            res.json = jest.fn().mockReturnValue(res);
-            return res;
-        }
         it('routes /basic-stats to processStats', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess});
 
-            const req = { 
-                path: "/basic-stats", 
+            const req = createRequest({
+                method: 'GET',
+                url: '/basic-stats',
                 query: {mode: "current"}, 
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
-            const res = mockRes();
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
 
             await weatherStatsHandler(req, res);
 
-            expect(res.json).toHaveBeenCalled();
+            expect(res._getStatusCode()).toBe(200);
+
+            const responseData = res._getJSONData();
+            expect(responseData).toHaveProperty('data');
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
@@ -230,17 +205,18 @@ describe('Weather stats', () => {
         it('routes /basic-stats to processStats without explicit mode', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess});
 
-            const req = { 
-                path: "/basic-stats",
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
-            const res = mockRes();
+            const req = createRequest({
+                method: 'GET',
+                url: '/basic-stats',
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
 
             await weatherStatsHandler(req, res);
 
-            expect(res.json).toHaveBeenCalled();
+            expect(res._getStatusCode()).toBe(200);
+
+            const responseData = res._getJSONData();
+            expect(responseData).toHaveProperty('data');
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
@@ -251,18 +227,18 @@ describe('Weather stats', () => {
 
         it('routes /forecasted-basic-stats to processStats without explicit mode', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueBasicResponseSuccess});
-
-            const req = { 
-                path: "/forecasted-basic-stats",
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
-            const res = mockRes();
+            const req = createRequest({
+                method: 'GET',
+                url: '/forecasted-basic-stats',
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
 
             await weatherStatsHandler(req, res);
 
-            expect(res.json).toHaveBeenCalled();
+            expect(res._getStatusCode()).toBe(200);
+
+            const responseData = res._getJSONData();
+            expect(responseData).toHaveProperty('data');
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
@@ -274,18 +250,19 @@ describe('Weather stats', () => {
         it('routes /forecasted-cloud-stats to processStats', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess});
 
-            const req = { 
-                path: "/forecasted-cloud-stats", 
+            const req = createRequest({
+                method: 'GET',
+                url: '/forecasted-cloud-stats',
                 query: { mode: "current" },
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
-            const res = mockRes();
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
 
             await weatherStatsHandler(req, res);
             
-            expect(res.json).toHaveBeenCalled();
+            expect(res._getStatusCode()).toBe(200);
+
+            const responseData = res._getJSONData();
+            expect(responseData).toHaveProperty('data');
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
@@ -294,20 +271,46 @@ describe('Weather stats', () => {
             )
         })
 
-        it('routes /forecasted-cloud-stats to processStats without explicit mode', async () => {
+        it('routes /forecasted-cloud-stats to processStats without explicit query', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess});
 
-            const req = { 
-                path: "/forecasted-cloud-stats",
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
-            const res = mockRes();
+            const req = createRequest({
+                method: 'GET',
+                url: '/forecasted-cloud-stats',
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
+
+            const querylessReq = Object.assign({}, req, { query: undefined }) as ff.Request; // This is to remove the query that comes by default and is required
+
+            await weatherStatsHandler(querylessReq, res);
+            
+            expect(res._getStatusCode()).toBe(200);
+
+            const responseData = res._getJSONData();
+            expect(responseData).toHaveProperty('data');
+
+            // check if correct endpoint
+            expect(mockedAxios.get).toHaveBeenCalledWith(
+                expect.stringContaining('cloud'),
+                expect.any(Object)
+            )
+        })
+
+        it('routes /forecasted-cloud-stats to processStats without explicit query.mode', async () => {
+            mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess});
+
+            const req = createRequest({
+                method: 'GET',
+                url: '/forecasted-cloud-stats',
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
 
             await weatherStatsHandler(req, res);
             
-            expect(res.json).toHaveBeenCalled();
+            expect(res._getStatusCode()).toBe(200);
+
+            const responseData = res._getJSONData();
+            expect(responseData).toHaveProperty('data');
 
             // check if correct endpoint
             expect(mockedAxios.get).toHaveBeenCalledWith(
@@ -319,39 +322,55 @@ describe('Weather stats', () => {
         it('routes / to processStats', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess});
 
-            const req = { path: "/"} as unknown as ff.Request;
-            const res = mockRes();
+            const req = createRequest({
+                method: 'GET',
+                url: '/',
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
 
             await weatherStatsHandler(req, res);
             
             // check if correct endpoint
-            expect(res.status).toHaveBeenCalledWith(200);
-            expect(res.send).toHaveBeenCalledWith("🐈‍⬛");
+            expect(res._getStatusCode()).toBe(200);
+            expect(res._getData()).toBe("🐈‍⬛");
         })
 
         it('returns 400 for unknown paths', async () => {
-            const req = { path: '/unknown' } as unknown as ff.Request;
-            const res = mockRes();
-    
+            const req = createRequest({
+                method: 'GET',
+                url: '/unknown',
+                headers: { authorization: `Bearer ${AUTH_TOKEN}` }
+            }) as ff.Request;
             await weatherStatsHandler(req, res);
-    
-            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res._getStatusCode()).toBe(400);
+        });
+
+        it('returns 401 missing bearer token', async () => {
+            const req = createRequest({
+                method: 'GET',
+                url: '/',
+            }) as ff.Request;
+            await weatherStatsHandler(req, res);
+            expect(res._getStatusCode()).toBe(401);
+        });
+
+        it('returns 401 invalid bearer token', async () => {
+            const req = createRequest({
+                method: 'GET',
+                url: '/',
+                headers: { authorization: `Bearer wrong_token` }
+            }) as ff.Request;
+            await weatherStatsHandler(req, res);
+            expect(res._getStatusCode()).toBe(401);
         });
 
         it('still returns if cache fails', async () => {
             mockedAxios.get.mockResolvedValueOnce({ data: mockedMeteoblueCloudResponseSuccess });
             mockedAxios.post.mockRejectedValueOnce(new Error("Cache Down"));
-
-            const authReq = {
-                ...req,
-                headers: {
-                    authorization: `Bearer ${AUTH_TOKEN}`
-                }
-            } as unknown as ff.Request;
             
             // suppress output during test and verify it was called
             const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(()=>{});
-            await expect(processStats(authReq, res, ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string))
+            await expect(processStats(ENV.METEOBLUE_BASIC_API as string, ENV.BASIC_CACHE_ENDPOINT as string))
                 .resolves.not.toThrow();
 
             expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Cache upload error: Cache Down"));
@@ -359,6 +378,19 @@ describe('Weather stats', () => {
         })
     })
 
-    
-
+    describe('cacheResult', () => {
+        it('log plain string when the error is not an Error object', async () => {
+            const stringError = "String error"; // not an Error object, just a string
+            mockedAxios.post.mockRejectedValueOnce(stringError);
+        
+            // suppress output during test and verify it was called
+            const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        
+            const sampleData = { units: {}, time: "2026-01-01" };
+            await cacheResult('endpoint', 'cache_url', 'params', sampleData);
+        
+            expect(consoleSpy).toHaveBeenCalledWith(`Cache upload error: ${stringError}`);
+            consoleSpy.mockRestore();
+        });
+    })
 });
