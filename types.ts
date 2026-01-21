@@ -8,7 +8,7 @@ export interface MeteoblueMetadata {
     longitude: number;
     utc_timeoffset: number;
     generation_time_ms: number;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export interface MeteoblueUnits {
@@ -31,7 +31,7 @@ export interface MeteoblueBasicHourlyData {
     relativehumidity: number[];
     sealevelpressure: number[];
     winddirection: number[];
-    [key: string]: any[];
+    [key: string]: unknown[];
 }
 
 export interface MeteoblueCloudsHourlyData {
@@ -43,7 +43,7 @@ export interface MeteoblueCloudsHourlyData {
     visibility: number[];
     midclouds: number[];
     sunshinetime: number[];
-    [key: string]: any[];
+    [key: string]: unknown[];
 }
 
 export interface MeteoblueBaseResponse {
@@ -51,7 +51,7 @@ export interface MeteoblueBaseResponse {
     units: MeteoblueUnits;
     data_1h: {
         time: string[];
-        [key:string]: any[] | any;
+        [key:string]: unknown[] | unknown;
     }
 }
 
